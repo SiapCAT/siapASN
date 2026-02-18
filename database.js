@@ -3433,11 +3433,11 @@ const BANK_SOAL = {
     }));
 
     // Masukkan ke Paket Tryout
-    BANK_SOAL['Tryout SKD - Paket A'] = hotsData;
+    BANK_SOAL['TRYOUT A'] = hotsData; 
     
-    // Paket B & C kita acak urutannya biar beda dikit (sebagai variasi)
-    BANK_SOAL['Tryout SKD - Paket B'] = [...hotsData].sort(() => Math.random() - 0.5);
-    BANK_SOAL['Tryout SKD - Paket C'] = [...hotsData].sort(() => Math.random() - 0.5);
+    // Paket B & C kita acak urutannya
+    BANK_SOAL['TRYOUT B'] = [...hotsData].sort(() => Math.random() - 0.5);
+    BANK_SOAL['TRYOUT C'] = [...hotsData].sort(() => Math.random() - 0.5);
     
     console.log("System: Database siap! Total Soal Tryout: " + hotsData.length);
 })();
