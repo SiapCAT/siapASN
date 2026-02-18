@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAT SYSTEM 2026 - PREMIUM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+    apiKey: "AIzaSyAf_Ffu3G7tYgq3IleE8lMbShMVT63r5Y0",
+    authDomain: "cat-cpns-2026-20b15.firebaseapp.com",
+    projectId: "cat-cpns-2026-20b15",
+    storageBucket: "cat-cpns-2026-20b15.firebasestorage.app",
+    messagingSenderId: "6640497717",
+    appId: "1:6640497717:web:b4b4ec9cbd264d1636ad7c",
+    measurementId: "G-PKKRTG4B7W",
+    databaseURL: "https://cat-cpns-2026-20b15-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        window.auth = auth;
+        window.logoutUser = logoutUser;
+        let currentSessionID = Date.now().toString();
+
+        // FUNGSI AUTHENTICATION GABUNGAN (LOGIN & REGISTER)
+        window.handleAuth = function(type) {
+            const email = document.getElementById('email-input').value;
+            const pass = document.getElementById('pass-input').value;
+            const btn = document.getElementById('btn-action');
+            
+            if(!email || !pass) { alert("Mohon isi Email dan Kata Sandi."); return; }
+
+            btn.disabled = true;
+            btn.innerText = "MEMPROSES...";
+
+            if (type === 'login') {
+                // --- LOGIKA LOGIN ---
+                signInWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    checkUserStatus(userCredential.user);
+                })
+                .catch((error) => {
+                    alert("LOGIN GAGAL: " + error.message);
+                    btn.innerText = "MASUK SEKARANG";
+                    btn.disabled = false;
+                });
+            } else {
+                // --- LOGIKA REGISTER ---
+                createUserWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    // Simpan data user dengan status PENDING
+                    const user = userCredential.user;
+                    set(ref(db, 'users/' + user.uid), {
+                        email: user.email,
+                        status: 'pending', // KUNCI UTAMA: PENDING!
+                        created_at: new Date().toISOString(),
+                        session_id: 'init'
+                    }).then(() => {
+                        alert("PENDAFTARAN BERHASIL!\n\nAkun Anda sedang dalam proses verifikasi Admin. Silakan hubungi Admin untuk aktivasi setelah melakukan pembayaran.");
+                        btn.innerText = "DAFTAR AKUN";
+                        btn.disabled = false;
+                        // Otomatis logout agar tidak masuk
+                        signOut(auth);
+                    });
+                })
+                .catch((error) => {
+                    alert("PENDAFTARAN GAGAL: " + error.message);
+                    btn.innerText = "DAFTAR AKUN";
+                    btn.disabled = false;
+                });
+            }
+        }
+
+        // FUNGSI PENGECEKAN STATUS (GERBANG TOL)
+        function checkUserStatus(user) {
+            const btn = document.getElementById('btn-action');
+            const userRef = ref(db, 'users/' + user.uid);
+            
+            get(userRef).then((snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    if (data.status === 'active') {
+                        // JIKA AKTIF -> UPDATE SESSION & MASUK
+                        updateSessionAndEnter(user);
+                    } else {
+                        // JIKA PENDING -> TENDANG KELUAR
+                        alert("⚠️ AKSES DITOLAK ⚠️\n\nAkun Anda belum diaktifkan oleh Admin.\nMohon selesaikan pembayaran dan konfirmasi ke Admin.");
+                        signOut(auth);
+                        btn.innerText = "MASUK SEKARANG";
+                        btn.disabled = false;
+                    }
+                } else {
+                    // Kasus aneh: User ada di Auth tapi ga ada di DB (misal akun lama)
+                    // Auto-fix: anggap pending
+                     alert("Data akun tidak valid. Hubungi Admin.");
+                     signOut(auth);
+                     btn.disabled = false;
+                }
+            });
+        }
+
+        function updateSessionAndEnter(user) {
+            const userRef = ref(db, 'users/' + user.uid);
+            // Update session_id baru
+            set(userRef, {
+                email: user.email,
+                status: 'active',
+                session_id: currentSessionID, 
+                last_login: new Date().toISOString()
+            }).then(() => {
+                switchScreen('screen-cover');
+                monitorSession(user.uid);
+            });
+        }
+
+        function logoutUser() {
+            signOut(auth).then(() => location.reload());
+        }
+
+        function monitorSession(uid) {
+            const sessionRef = ref(db, 'users/' + uid + '/session_id');
+            onValue(sessionRef, (snapshot) => {
+                const cloudSession = snapshot.val();
+                if (cloudSession && cloudSession !== currentSessionID && cloudSession !== 'init') {
+                    alert("⚠️ PERINGATAN KEAMANAN ⚠️\n\nAkun Anda login di perangkat lain.");
+                    logoutUser();
+                }
+            });
+        }
+
+        // Listener Auth State (Biar ga auto-login kalau pending)
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Cek status diam-diam, kalau pending langsung logout
+                get(ref(db, 'users/' + user.uid + '/status')).then((snap) => {
+                   if(snap.val() !== 'active') {
+                       // Jangan lakukan apa-apa di UI, biarkan user login manual
+                       signOut(auth);
+                   }
+                });
+            } else {
+                switchScreen('screen-login');
+            }
+        });
+
+        // UI SWITCHER (LOGIN <-> DAFTAR)
+        window.toggleMode = function() {
+            const title = document.getElementById('auth-title');
+            const btn = document.getElementById('btn-action');
+            const toggleText = document.getElementById('auth-toggle-text');
+            const mode = btn.getAttribute('data-mode');
+
+            if (mode === 'login') {
+                // Ubah ke Mode Daftar
+                title.innerText = "DAFTAR AKUN BARU";
+                btn.innerText = "DAFTAR SEKARANG";
+                btn.setAttribute('data-mode', 'register');
+                btn.setAttribute('onclick', "window.handleAuth('register')");
+                toggleText.innerHTML = 'Sudah punya akun? <b class="text-blue-600 cursor-pointer" onclick="toggleMode()">Login disini</b>';
+            } else {
+                // Ubah ke Mode Login
+                title.innerText = "PORTAL AKSES PESERTA";
+                btn.innerText = "MASUK SEKARANG";
+                btn.setAttribute('data-mode', 'login');
+                btn.setAttribute('onclick', "window.handleAuth('login')");
+                toggleText.innerHTML = 'Belum punya akun? <b class="text-blue-600 cursor-pointer" onclick="toggleMode()">Daftar disini</b>';
+            }
+        }
+
+    </script>
+
+    <script src="database.js"></script> 
+
+    <section id="screen-login" class="screen active bg-[#0F2C59] min-h-screen flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-official-red p-6 text-center">
+                <h1 class="text-white font-header text-3xl mb-1">CAT SYSTEM 2026</h1>
+                <p id="auth-title" class="text-blue-100 text-xs tracking-widest uppercase">Portal Akses Peserta</p>
+            </div>
+            <div class="p-8">
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Email</label>
+                    <input type="email" id="email-input" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 font-bold text-gray-700" placeholder="nama@email.com">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Kata Sandi</label>
+                    <input type="password" id="pass-input" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 font-bold text-gray-700" placeholder="••••••••">
+                </div>
+                
+                <button id="btn-action" data-mode="login" onclick="window.handleAuth('login')" class="w-full bg-[#0F2C59] text-white py-4 rounded-xl font-header text-lg tracking-wider hover:bg-blue-900 transition shadow-lg">
+                    MASUK SEKARANG
+                </button>
+                
+                <p id="auth-toggle-text" class="text-xs text-center text-gray-500 mt-6">
+                    Belum punya akun? <b class="text-blue-600 cursor-pointer hover:underline" onclick="window.toggleMode()">Daftar disini</b>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="screen-cover" class="screen bg-pattern flex flex-col items-center justify-between py-10 px-6 hidden">
+        <div class="w-full max-w-md border-b-4 border-black pb-4 mb-4 text-center">
+            <div class="inline-block bg-black text-white px-3 py-1 text-xs font-bold tracking-[0.2em] font-header mb-2">AKSES PREMIUM</div>
+            <p class="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Untuk Peserta Seleksi CPNS 2026</p>
+        </div>
+
+        <div class="w-full max-w-md text-center">
+            <h2 class="font-header text-4xl text-gray-800 leading-none tracking-tight">PANDUAN</h2>
+            <h1 class="font-header text-6xl font-bold text-official-red leading-none mb-2 tracking-tighter drop-shadow-sm">KISI-KISI<br>RESMI</h1>
+            <div class="flex items-center justify-center gap-3 mb-6">
+                <div class="h-1 w-12 bg-black"></div><span class="font-header text-3xl font-bold text-black tracking-wide">CAT 2026</span><div class="h-1 w-12 bg-black"></div>
+            </div>
+            <div class="bg-yellow-50 border-2 border-black p-3 mb-8 transform -rotate-1 shadow-lg">
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Mengacu Pada Regulasi Terbaru:</p>
+                <p class="font-header text-lg leading-tight text-black">KEPMENPAN RB NO. 321<br>TAHUN 2024</p>
+            </div>
+            <div class="mb-8">
+                <p class="text-xs font-bold text-official-red uppercase tracking-widest mb-2 border-b border-red-200 inline-block pb-1">Full Arsip Soal Asli (FR)</p>
+                <div class="flex justify-center gap-2 flex-wrap font-header text-sm text-gray-600">
+                    <span class="bg-white border border-gray-300 px-2 py-1 rounded">2019</span>
+                    <span class="bg-white border border-gray-300 px-2 py-1 rounded">2021</span>
+                    <span class="bg-white border border-gray-300 px-2 py-1 rounded">2023</span>
+                    <span class="bg-white border border-gray-300 px-2 py-1 rounded">2024</span>
+                    <span class="bg-black text-white border border-black px-2 py-1 rounded shadow-md">2025</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-md">
+            <button onclick="goToMenu()" class="btn-start w-full py-4 rounded-lg text-xl font-header tracking-wide flex items-center justify-center gap-3 group">
+                MULAI PEMBELAJARAN <span class="group-hover:translate-x-1 transition-transform">➔</span>
+            </button>
+            <button onclick="hardReset()" class="mt-4 w-full text-xs font-bold text-red-500 hover:text-red-700 underline tracking-wider uppercase py-2">
+                ⚠️ Reset Seluruh Memori Testing
+            </button>
+            <button onclick="window.logoutUser()" class="mt-2 w-full text-xs font-bold text-gray-400 hover:text-black uppercase py-2">
+                Log Out Akun
+            </button>
+        </div>
+    </section>
+
+    <section id="screen-menu" class="screen bg-gray-50 pb-20 hidden">
+        <div class="bg-white sticky top-0 z-30 border-b border-gray-200 px-5 py-4 flex justify-between items-center shadow-sm">
+            <div>
+                <h2 class="font-header text-2xl text-black">ARSIP DATA</h2>
+                <p class="text-xs text-gray-500 font-medium">Database Modul & Soal</p>
+            </div>
+            <button onclick="goToCover()" class="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-2 rounded hover:bg-gray-200 border border-gray-300">KEMBALI</button>
+        </div>
+
+        <div class="p-5 space-y-8 max-w-md mx-auto">
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">Strategi & Analisa Data</h3>
+                <div onclick="switchScreen('screen-tips')" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer flex items-center justify-center gap-4 group max-w-lg mx-auto transform active:scale-95">
+                    <div class="bg-yellow-100 p-3 rounded-full text-yellow-600 group-hover:bg-yellow-500 group-hover:text-white transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                    </div>
+                    <div class="text-left">
+                        <h4 class="font-bold text-gray-800 text-lg group-hover:text-yellow-600 transition">Buka Kunci Rahasia Lolos</h4>
+                        <p class="text-xs text-gray-500">Kumpulan strategi taktis, manajemen mental, & bedah passing grade.</p>
+                    </div>
+                    <div class="ml-auto text-gray-300 group-hover:translate-x-1 transition">➔</div>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Materi SKD 2026</h3>
+                <div class="space-y-3">
+                    <div onclick="openMateri('TWK')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
+                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold text-sm">TWK</div>
+                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Wawasan Kebangsaan</h4><p class="text-xs text-gray-500">Nasionalisme, Pilar Negara</p></div><span class="text-gray-300">➔</span>
+                    </div>
+                    <div onclick="openMateri('TIU')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">TIU</div>
+                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Intelegensia Umum</h4><p class="text-xs text-gray-500">Verbal, Numerik, Logika</p></div><span class="text-gray-300">➔</span>
+                    </div>
+                    <div onclick="openMateri('TKP')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
+                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">TKP</div>
+                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Karakteristik Pribadi</h4><p class="text-xs text-gray-500">Pelayanan, Jejaring Kerja</p></div><span class="text-gray-300">➔</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mt-10 mb-4">Arsip Soal FR</h2>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('FR 2019-2020', 'belajar')">
+                    <div><h4 class="font-bold text-gray-700 text-sm">FR 2019 - 2020</h4><p class="text-[10px] text-gray-400">Arsip Soal Lampau</p></div><span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">Buka</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('FR 2020-2021', 'belajar')">
+                    <div><h4 class="font-bold text-gray-700 text-sm">FR 2020 - 2021</h4><p class="text-[10px] text-gray-400">Arsip Soal Lampau</p></div><span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">Buka</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('FR 2021-2022', 'belajar')">
+                    <div><h4 class="font-bold text-gray-700 text-sm">FR 2021 - 2022</h4><p class="text-[10px] text-gray-400">Arsip Soal Lampau</p></div><span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">Buka</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('FR 2022-2023', 'belajar')">
+                    <div><h4 class="font-bold text-gray-700 text-sm">FR 2022 - 2023</h4><p class="text-[10px] text-gray-400">Arsip Soal Lampau</p></div><span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">Buka</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('FR 2024-2025', 'belajar')">
+                    <div><h4 class="font-bold text-gray-700 text-sm">FR 2023 - 2024</h4><p class="text-[10px] text-gray-400">Soal Asli Tahun Lalu</p></div><span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded">Buka</span>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 mt-8">Simulasi Tryout</h3>
+                <div class="bg-white p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('TRYOUT A', 'tryout')">
+                    <div><h4 class="font-bold text-gray-800 text-sm">Tryout SKD - Paket A</h4><p class="text-[10px] text-gray-500">110 Soal / 100 Menit</p></div><span class="text-xs bg-gray-100 px-2 py-1 rounded font-bold text-gray-500">Mulai</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('TRYOUT B', 'tryout')">
+                    <div><h4 class="font-bold text-gray-800 text-sm">Tryout SKD - Paket B</h4><p class="text-[10px] text-gray-500">110 Soal / 100 Menit</p></div><span class="text-xs bg-gray-100 px-2 py-1 rounded font-bold text-gray-500">Mulai</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('TRYOUT C', 'tryout')">
+                    <div><h4 class="font-bold text-gray-800 text-sm">Tryout SKD - Paket C</h4><p class="text-[10px] text-gray-500">110 Soal / 100 Menit</p></div><span class="text-xs bg-gray-100 px-2 py-1 rounded font-bold text-gray-500">Mulai</span>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-6 border-t border-gray-200">
+                <button onclick="showHistory()" class="w-full py-4 bg-gray-800 text-white rounded-xl font-bold tracking-wider shadow-md hover:bg-gray-900 transition flex items-center justify-center gap-2 transform active:scale-95">
+                    <span>📊 LIHAT HISTORI NILAI SAYA</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="screen-tips" class="screen bg-white min-h-screen hidden">
+        <div class="bg-official-red text-white p-6 rounded-b-[2rem] shadow-lg mb-6 relative overflow-hidden">
+            <button onclick="goToMenu()" class="text-xs font-bold bg-white/20 px-3 py-1 rounded-full mb-4 hover:bg-white/30 transition relative z-10">← KEMBALI</button>
+            <h2 class="font-header text-3xl relative z-10">STRATEGI PERANG</h2>
+        </div>
+        <div class="p-5 pb-20 space-y-4 max-w-md mx-auto">
+            <div onclick="openTip('time-management')" class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex gap-4 items-start cursor-pointer hover:shadow-md transition">
+                <div class="bg-blue-50 p-3 rounded-lg text-blue-600">⏱️</div>
+                <div><h4 class="font-bold text-gray-800 mb-1">Rule 54 Detik</h4><p class="text-xs text-gray-500 leading-relaxed">Manajemen waktu adalah kunci.</p></div>
+            </div>
+            <div onclick="openTip('urutan-pengerjaan')" class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex gap-4 items-start cursor-pointer hover:shadow-md transition">
+                <div class="bg-green-50 p-3 rounded-lg text-green-600">🎯</div>
+                <div><h4 class="font-bold text-gray-800 mb-1">Urutan Mematikan</h4><p class="text-xs text-gray-500 leading-relaxed">Strategi urutan pengerjaan soal.</p></div>
+            </div>
+            <div onclick="openTip('passing-grade')" class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex gap-4 items-start cursor-pointer hover:shadow-md transition">
+                <div class="bg-indigo-50 p-3 rounded-lg text-indigo-600">📊</div>
+                <div><h4 class="font-bold text-gray-800 mb-1">Amankan Ambang Batas</h4><p class="text-xs text-gray-500 leading-relaxed">Target skor aman lolos PG.</p></div>
+            </div>
+            <div onclick="openTip('soal-cerita')" class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex gap-4 items-start cursor-pointer hover:shadow-md transition">
+                <div class="bg-red-50 p-3 rounded-lg text-red-600">🔍</div>
+                <div><h4 class="font-bold text-gray-800 mb-1">Jebakan Soal Cerita</h4><p class="text-xs text-gray-500 leading-relaxed">Teknik membaca cepat (skimming).</p></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="screen-tips-detail" class="screen bg-white min-h-screen hidden">
+        <nav class="bg-white border-b sticky top-0 z-50 px-4 py-3 flex items-center gap-3"><button onclick="switchScreen('screen-tips')" class="text-gray-500 hover:text-black font-bold text-lg">←</button><span class="font-header text-lg">DETAIL STRATEGI</span></nav>
+        <div class="p-6 max-w-md mx-auto"><div class="flex justify-center mb-6" id="detail-icon"></div><h2 class="text-2xl font-black text-center text-gray-900 mb-6 font-header" id="detail-title"></h2><div class="prose prose-sm text-gray-600 leading-relaxed" id="detail-content"></div><button onclick="switchScreen('screen-tips')" class="mt-8 w-full py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-lg transition transform active:scale-95">MENGERTI</button></div>
+    </section>
+
+    <section id="materi-TWK" class="screen bg-gray-50 min-h-screen hidden">
+        <nav class="bg-white border-b sticky top-0 z-50 px-4 py-3 flex items-center gap-3"><button onclick="goToMenu()" class="text-gray-500 hover:text-black font-bold text-lg">←</button><span class="font-header text-lg uppercase">Modul TWK</span></nav>
+        <div class="p-5 max-w-md mx-auto"><div id="materi-content-TWK" class="space-y-4"></div></div>
+    </section>
+    
+    <section id="materi-TIU" class="screen bg-gray-50 min-h-screen hidden">
+        <nav class="bg-white border-b sticky top-0 z-50 px-4 py-3 flex items-center gap-3"><button onclick="goToMenu()" class="text-gray-500 hover:text-black font-bold text-lg">←</button><span class="font-header text-lg uppercase">Modul TIU</span></nav>
+        <div class="p-5 max-w-md mx-auto"><div id="materi-content-TIU" class="space-y-4"></div></div>
+    </section>
+    
+    <section id="materi-TKP" class="screen bg-gray-50 min-h-screen hidden">
+        <nav class="bg-white border-b sticky top-0 z-50 px-4 py-3 flex items-center gap-3"><button onclick="goToMenu()" class="text-gray-500 hover:text-black font-bold text-lg">←</button><span class="font-header text-lg uppercase">Modul TKP</span></nav>
+        <div class="p-5 max-w-md mx-auto"><div id="materi-content-TKP" class="space-y-4"></div></div>
+    </section>
+
+    <section id="screen-soal" class="screen bg-gray-100 hidden h-screen w-full flex-col fixed inset-0 z-40 overflow-hidden">
+        
+        <header class="bg-[#0F2C59] text-white px-4 py-3 flex justify-between items-center shadow-md shrink-0 z-50">
+            <div class="flex items-center gap-3">
+                <button id="btn-header-exit" class="hover:bg-white/20 px-3 py-1.5 rounded transition text-xs font-bold flex items-center gap-1 border border-white/20">
+                    ✕ <span class="hidden md:inline">KELUAR</span>
+                </button>
+                <div class="w-px h-6 bg-white/30"></div>
+                <div class="flex flex-col">
+                    <span id="nav-paket-title" class="font-bold text-sm tracking-wider uppercase text-yellow-400">LOADING...</span>
+                    <span id="nav-posisi" class="text-[10px] text-blue-200 font-medium tracking-widest">SOAL 1</span>
+                </div>
+            </div>
+            
+            <div id="timer-display" class="bg-[#FFC436] text-[#0F2C59] px-4 py-1 rounded-md font-black text-lg shadow-lg tracking-widest hidden">
+                00:00
+            </div>
+
+            <button onclick="toggleMap()" class="lg:hidden bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded text-xs font-bold transition border border-white/20">
+                NO. SOAL
+            </button>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden relative">
+            
+            <div class="flex-1 flex flex-col relative h-full bg-white overflow-hidden">
+                <div class="flex-1 overflow-y-auto p-5 pb-24 md:p-8" id="scroll-area-soal">
+                    
+                    <div class="w-full bg-gray-200 h-1.5 mb-6 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="bg-blue-600 h-1.5 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+
+                    <div id="question-container" class="mb-8 max-w-4xl mx-auto"></div>
+
+                    <div id="explanation-area" class="hidden mt-6 animate-fade-in max-w-4xl mx-auto">
+                        <div class="bg-blue-50 border-l-4 border-blue-600 p-5 rounded-r-lg shadow-sm">
+                            <h4 class="font-bold text-blue-900 text-sm mb-2 flex items-center gap-2">
+                                💡 PEMBAHASAN & KUNCI
+                            </h4>
+                            <div id="explanation-text" class="text-sm text-gray-800 leading-relaxed text-justify"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-3 md:p-4 flex justify-between gap-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-40">
+                    <button id="btn-prev" onclick="prevQuestion()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs md:text-sm flex items-center gap-2 transition">
+                        ⬅ <span class="hidden md:inline">SEBELUMNYA</span>
+                    </button>
+                    
+                    <div class="flex-1"></div>
+
+                    <button id="btn-next" onclick="nextQuestion()" class="px-6 py-2 bg-[#0F2C59] hover:bg-blue-900 text-white rounded-lg font-bold text-xs md:text-sm flex items-center gap-2 shadow-lg transition">
+                        <span class="hidden md:inline">SELANJUTNYA</span> ➔
+                    </button>
+                    
+                    <button id="btn-finish" class="hidden px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs md:text-sm flex items-center gap-2 shadow-lg transition">
+                        ✔ SELESAI
+                    </button>
+                </div>
+            </div>
+
+            <div id="map-drawer" class="w-72 bg-gray-50 border-l border-gray-200 flex flex-col shrink-0 absolute lg:relative right-0 h-full z-50 transform translate-x-full lg:translate-x-0 transition-transform duration-300 shadow-2xl lg:shadow-none">
+                <div class="p-4 border-b border-gray-200 bg-white flex justify-between items-center shadow-sm">
+                    <h3 class="font-black text-[#0F2C59] text-xs tracking-widest uppercase">PETA SOAL</h3>
+                    <button onclick="toggleMap()" class="lg:hidden text-gray-400 hover:text-red-500 font-bold text-lg">✕</button>
+                </div>
+                
+                <div id="map-filter" class="p-2 grid grid-cols-3 gap-1 bg-white border-b border-gray-200">
+                    <button onclick="jumpToSection('TWK')" class="text-[10px] font-bold py-1.5 bg-red-50 text-red-600 rounded border border-red-100 hover:bg-red-100">TWK</button>
+                    <button onclick="jumpToSection('TIU')" class="text-[10px] font-bold py-1.5 bg-blue-50 text-blue-600 rounded border border-blue-100 hover:bg-blue-100">TIU</button>
+                    <button onclick="jumpToSection('TKP')" class="text-[10px] font-bold py-1.5 bg-green-50 text-green-600 rounded border border-green-100 hover:bg-green-100">TKP</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-3">
+                    <div id="grid-container" class="grid grid-cols-5 gap-2 pb-20"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="screen-result" class="screen bg-gray-50 min-h-screen hidden pb-20">
+        <header class="bg-[#0F2C59] text-white px-6 py-8 text-center shadow-md relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-40 h-40 bg-white opacity-5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+            <h2 class="font-header text-3xl mb-1 relative z-10">HASIL SIMULASI</h2>
+            <p class="text-xs text-blue-200 uppercase tracking-widest relative z-10" id="result-paket-title">TRYOUT PAKET A</p>
+        </header>
+
+        <div class="p-5 max-w-md mx-auto -mt-6 relative z-20">
+            <div id="status-banner" class="bg-white p-6 rounded-2xl shadow-xl border-t-8 text-center mb-6">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">STATUS KELULUSAN</h3>
+                <h1 id="status-text" class="font-black text-4xl mb-2 font-header">LULUS</h1>
+                <p id="status-desc" class="text-xs text-gray-500">Selamat! Anda memenuhi semua ambang batas.</p>
+            </div>
+
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 pl-2">RINCIAN SKOR (KEPMENPAN-RB)</h3>
+            <div class="space-y-3">
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-600 font-black text-lg">TWK</div>
+                        <div><p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Wawasan Kebangsaan</p><p class="text-xs text-gray-400">Passing Grade: 65</p></div>
+                    </div>
+                    <div class="text-right"><span id="score-twk" class="text-2xl font-black text-gray-800">0</span><span id="badge-twk" class="block text-[9px] font-bold px-2 py-0.5 rounded uppercase mt-1 text-center">Gagal</span></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-black text-lg">TIU</div>
+                        <div><p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Intelegensia Umum</p><p class="text-xs text-gray-400">Passing Grade: 80</p></div>
+                    </div>
+                    <div class="text-right"><span id="score-tiu" class="text-2xl font-black text-gray-800">0</span><span id="badge-tiu" class="block text-[9px] font-bold px-2 py-0.5 rounded uppercase mt-1 text-center">Gagal</span></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 font-black text-lg">TKP</div>
+                        <div><p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Karakteristik Pribadi</p><p class="text-xs text-gray-400">Passing Grade: 166</p></div>
+                    </div>
+                    <div class="text-right"><span id="score-tkp" class="text-2xl font-black text-gray-800">0</span><span id="badge-tkp" class="block text-[9px] font-bold px-2 py-0.5 rounded uppercase mt-1 text-center">Gagal</span></div>
+                </div>
+            </div>
+
+            <div id="evaluation-summary"></div>
+
+            <button onclick="goToMenu()" class="mt-8 w-full py-4 bg-[#0F2C59] text-white rounded-xl font-bold tracking-wider shadow-lg hover:bg-blue-900 transition flex items-center justify-center gap-2">
+                <span>KEMBALI KE MENU UTAMA</span> <span>🏠</span>
+            </button>
+        </div>
+    </section>
+
+    <div id="resume-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm transition-all">
+        <div class="bg-white w-full max-w-sm rounded-xl p-8 shadow-2xl text-center">
+            <div class="text-5xl mb-4">⏱️</div>
+            <h3 class="font-black text-gray-900 text-xl mb-2 tracking-tight">LANJUTKAN UJIAN?</h3>
+            <p class="text-sm text-gray-500 mb-8 leading-relaxed">Terakhir mengerjakan <span id="last-seen-num" class="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">No. 1</span>.</p>
+            <div class="flex gap-3">
+                <button onclick="resetProgress()" class="flex-1 py-3 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg font-bold text-xs tracking-wider transition">ULANG</button>
+                <button onclick="resumeProgress()" class="flex-1 py-3 bg-[#0F2C59] hover:bg-blue-900 text-white rounded-lg font-bold text-xs tracking-wider shadow-lg transition">LANJUTKAN</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="history-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm transition-all">
+        <div class="bg-gray-50 w-full max-w-md rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="bg-white flex justify-between items-center p-4 border-b border-gray-200 shadow-sm z-10">
+                <h3 class="font-black text-[#0F2C59] text-lg tracking-wider">HISTORI NILAI</h3>
+                <button onclick="closeHistory()" class="text-gray-400 hover:text-red-500 font-bold text-2xl transition px-2">✕</button>
+            </div>
+            <div id="history-list" class="overflow-y-auto flex-1 p-4 space-y-3">
+                </div>
+        </div>
+    </div>
+
+    <script>
+    /**
+     * APP ENGINE v4.0 (Final Architecture)
+     */
+    let activeQuestions = [];
+    let activeSession = {}; 
+    let currentIndex = 0;
+    let timerInterval;
+    let timeRemaining = 0;
+    let currentPaketName = "";
+    let currentMode = ""; // 'FR' (Belajar) atau 'TRYOUT' (Ujian)
+
+    // =========================================
+    // 1. PREPARE & SORTING DATA
+    // =========================================
+    function prepareQuestions(paketName) {
+        activeQuestions = [];
+        const sourceData = BANK_SOAL[paketName];
+
+        if (!sourceData || sourceData.length === 0) {
+            alert(`Database untuk ${paketName} belum tersedia atau kosong.`);
+            return;
+        }
+
+        // Clone data agar database asli aman
+        let pool = JSON.parse(JSON.stringify(sourceData));
+
+        // LOGIC PEMBEDA FR vs TRYOUT
+        if (paketName.includes('Tryout')) {
+            currentMode = 'TRYOUT';
+            // WAJIB URUT: TWK -> TIU -> TKP
+            const order = { 'TWK': 1, 'TIU': 2, 'TKP': 3 };
+            pool.sort((a, b) => (order[a.cat] || 9) - (order[b.cat] || 9));
+            // Ambil 110 Soal
+            activeQuestions = pool.slice(0, 110);
+        } else {
+            currentMode = 'FR';
+            // FR biarkan urutan aslinya (biasanya sudah dikelompokkan per tahun)
+            activeQuestions = pool;
+        }
+
+        startDrill(paketName, 0);
+    }
+
+    // =========================================
+    // 2. CONTROLLER (START & NAVIGASI)
+    // =========================================
+    window.checkProgress = function(paket) {
+        currentPaketName = paket;
+        const isTryout = paket.includes('Tryout');
+        const savedIdx = localStorage.getItem(`cpns_idx_${paket}`);
+
+        if (isTryout) {
+            if(confirm("MULAI TRYOUT SIMULASI?\n\n- Durasi: 100 Menit\n- Mode: TWK-TIU-TKP (Urut)\n- Fitur: Timer & Analisis Akhir\n\nSiap memulai?")) {
+                hardResetPaket(paket);
+                prepareQuestions(paket);
+            }
+        } else {
+            // Mode FR (Resume)
+            if (savedIdx) {
+                document.getElementById('last-seen-num').innerText = `No. ${parseInt(savedIdx) + 1}`;
+                document.getElementById('resume-modal').classList.remove('hidden');
+            } else {
+                prepareQuestions(paket);
+            }
+        }
+    };
+
+    function startDrill(paket, idx) {
+        currentIndex = idx;
+        const saved = localStorage.getItem(`cpns_session_${paket}`);
+        activeSession = saved ? JSON.parse(saved) : {};
+
+        switchScreen('screen-soal');
+        renderQuestion();
+        generateGridMap();
+
+        // SETUP UI BERDASARKAN MODE
+        const timerUI = document.getElementById('timer-display');
+        const navPosisi = document.getElementById('nav-posisi');
+        const mapFilter = document.getElementById('map-filter');
+        const btnExit = document.getElementById('btn-header-exit');
+
+        if (currentMode === 'TRYOUT') {
+            timerUI.classList.remove('hidden');
+            navPosisi.classList.add('hidden'); // Fokus waktu
+            mapFilter.classList.remove('hidden'); // Butuh filter TWK/TIU/TKP
+            btnExit.innerHTML = "SELESAI";
+            btnExit.onclick = finishUjian; // Tryout = Selesai
+            startTimer(100 * 60);
+        } else {
+            clearInterval(timerInterval);
+            timerUI.classList.add('hidden');
+            navPosisi.classList.remove('hidden'); // Fokus nomor
+            mapFilter.classList.add('hidden'); // FR biasanya campur atau per bab
+            btnExit.innerHTML = "⬅ KEMBALI";
+            btnExit.onclick = goToMenu; // FR = Kembali Menu
+        }
+    }
+
+    // =========================================
+    // 3. RENDERING ENGINE
+    // =========================================
+    function renderQuestion() {
+        const q = activeQuestions[currentIndex];
+        if(!q) return;
+
+        // Auto Scroll ke atas saat ganti soal
+        document.getElementById('scroll-area-soal').scrollTop = 0;
+
+        // 1. Header Info
+        document.getElementById('nav-paket-title').innerText = currentPaketName;
+        if(currentMode === 'FR') {
+            document.getElementById('nav-posisi').innerText = `${q.cat} • ${currentIndex + 1}/${activeQuestions.length}`;
+        }
+        document.getElementById('progress-bar').style.width = `${((currentIndex+1)/activeQuestions.length)*100}%`;
+
+        // 2. Render Soal
+        const container = document.getElementById('question-container');
+        let badgeColor = q.cat === 'TWK' ? 'bg-red-600' : (q.cat === 'TIU' ? 'bg-blue-600' : 'bg-green-600');
+        
+        let html = `
+            <div class="animate-fade-in">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="${badgeColor} text-white text-[10px] font-bold px-2 py-1 rounded tracking-wider shadow">${q.cat}</span>
+                    <span class="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-1 rounded tracking-wider">${q.sub || 'Kompetensi Umum'}</span>
+                </div>
+                <div class="text-base md:text-lg font-semibold text-gray-800 leading-relaxed mb-6 font-inter text-justify">${q.q}</div>
+                <div class="space-y-3">
+        `;
+
+        q.a.forEach((opt, i) => {
+            const char = String.fromCharCode(65 + i);
+            const isSel = activeSession[currentIndex] === i;
+            let css = "w-full text-left p-4 rounded-xl border transition-all flex gap-3 group relative overflow-hidden ";
+            
+            // LOGIC WARNA (HANYA DI MODE FR)
+            if (currentMode === 'FR' && isSel) {
+                if (q.cat === 'TKP') css += "border-blue-500 bg-blue-50 ring-1 ring-blue-500";
+                else css += (i === q.k) ? "border-green-500 bg-green-50 ring-1 ring-green-500" : "border-red-500 bg-red-50 ring-1 ring-red-500";
+            } else if (isSel) {
+                // TRYOUT: Netral Biru
+                css += "border-[#0F2C59] bg-blue-50 ring-1 ring-[#0F2C59]";
+            } else {
+                css += "border-gray-200 bg-white hover:bg-gray-50 hover:border-blue-300";
+            }
+
+            html += `
+                <button onclick="saveAnswer(${i})" class="${css}">
+                    <div class="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-500 bg-white shrink-0 group-hover:border-blue-500 group-hover:text-blue-500 transition-colors ${isSel ? 'bg-[#0F2C59] border-none text-white' : ''}">${char}</div>
+                    <span class="text-sm text-gray-700 font-medium">${opt}</span>
+                </button>
+            `;
+        });
+        html += `</div></div>`;
+        container.innerHTML = html;
+
+        // 3. Pembahasan (Mode FR Only)
+        const exp = document.getElementById('explanation-area');
+        if (currentMode === 'FR' && activeSession[currentIndex] !== undefined) {
+            let keyStr = (q.cat === 'TKP') ? "Poin Maksimal" : `Kunci Jawaban: ${String.fromCharCode(65 + q.k)}`;
+            document.getElementById('explanation-text').innerHTML = `
+                <div class="mb-2 font-bold text-[#0F2C59] border-b border-blue-200 pb-1">${keyStr}</div>
+                <div>${q.pembahasan || 'Pembahasan belum tersedia.'}</div>
+            `;
+            exp.classList.remove('hidden');
+        } else {
+            exp.classList.add('hidden');
+        }
+
+        updateNavButtons();
+    }
+
+    window.saveAnswer = function(idx) {
+        // Di mode FR, kalau sudah jawab, kunci jawaban muncul. Bisa ganti jawaban? Boleh.
+        activeSession[currentIndex] = idx;
+        localStorage.setItem(`cpns_session_${currentPaketName}`, JSON.stringify(activeSession));
+        localStorage.setItem(`cpns_idx_${currentPaketName}`, currentIndex);
+        renderQuestion();
+        updateGridMapItem(currentIndex);
+    }
+
+    // =========================================
+    // 4. NAVIGASI SYSTEM
+    // =========================================
+    window.nextQuestion = function() { if(currentIndex < activeQuestions.length-1) { currentIndex++; renderQuestion(); } }
+    window.prevQuestion = function() { if(currentIndex > 0) { currentIndex--; renderQuestion(); } }
+
+    function updateNavButtons() {
+        const isLast = currentIndex === activeQuestions.length - 1;
+        document.getElementById('btn-prev').classList.toggle('invisible', currentIndex === 0);
+        document.getElementById('btn-next').classList.toggle('hidden', isLast);
+        document.getElementById('btn-finish').classList.toggle('hidden', !isLast);
+        
+        // Atur Teks Tombol Akhir
+        const btnFin = document.getElementById('btn-finish');
+        if (currentMode === 'FR') {
+            btnFin.innerHTML = `SELESAI BELAJAR 🏠`;
+            btnFin.onclick = goToMenu;
+        } else {
+            btnFin.innerHTML = `KUMPULKAN UJIAN ✔`;
+            btnFin.onclick = finishUjian;
+        }
+    }
+
+    function generateGridMap() {
+        const grid = document.getElementById('grid-container');
+        grid.innerHTML = '';
+        activeQuestions.forEach((q, i) => {
+            const btn = document.createElement('button');
+            btn.id = `map-${i}`;
+            btn.innerText = i + 1;
+            
+            let c = "grid-soal-item "; // Base class
+            // Warna Kategori
+            if(q.cat === 'TWK') c += "bg-red-50 text-red-600 border-red-100 ";
+            if(q.cat === 'TIU') c += "bg-blue-50 text-blue-600 border-blue-100 ";
+            if(q.cat === 'TKP') c += "bg-green-50 text-green-600 border-green-100 ";
+            
+            // Status Terjawab
+            if(activeSession[i] !== undefined) c = "grid-soal-item bg-[#0F2C59] text-white border-[#0F2C59] shadow-md";
+            
+            btn.className = c;
+            btn.onclick = () => { currentIndex = i; renderQuestion(); if(window.innerWidth < 1024) toggleMap(); };
+            grid.appendChild(btn);
+        });
+        updateGridMapItem(currentIndex);
+    }
+
+    function updateGridMapItem(idx) {
+        document.querySelectorAll('#grid-container button').forEach(b => b.classList.remove('ring-2', 'ring-yellow-400', 'scale-110'));
+        const t = document.getElementById(`map-${idx}`);
+        if(t) t.classList.add('ring-2', 'ring-yellow-400', 'scale-110');
+    }
+
+    window.toggleMap = function() { document.getElementById('map-drawer').classList.toggle('translate-x-full'); }
+    
+    window.jumpToSection = function(cat) {
+        const idx = activeQuestions.findIndex(q => q.cat === cat);
+        if(idx !== -1) { currentIndex = idx; renderQuestion(); if(window.innerWidth<1024) toggleMap(); }
+        else alert("Bagian ini tidak ditemukan.");
+    }
+
+    // =========================================
+    // 5. SCORING & ANALISIS TITIK BUTA (DETAIL)
+    // =========================================
+    function startTimer(sec) {
+        timeRemaining = sec;
+        timerInterval = setInterval(() => {
+            timeRemaining--;
+            let m = Math.floor(timeRemaining/60).toString().padStart(2,'0');
+            let s = (timeRemaining%60).toString().padStart(2,'0');
+            document.getElementById('timer-display').innerText = `${m}:${s}`;
+            if(timeRemaining <= 0) { clearInterval(timerInterval); finishUjian(); }
+        }, 1000);
+    }
+
+    window.finishUjian = function() {
+        if(confirm("Yakin ingin mengakhiri ujian sekarang?")) hitungSkor();
+    }
+
+    function hitungSkor() {
+        clearInterval(timerInterval);
+        
+        let twk=0, tiu=0, tkp=0;
+        let blindSpotHTML = ""; // Penampung HTML Analisis
+
+        // Loop Analisis
+        activeQuestions.forEach((q, i) => {
+            const ans = activeSession[i];
+            let isWrong = false;
+            let detail = "";
+
+            if (q.cat === 'TKP') {
+                const poin = (ans !== undefined) ? (q.s ? q.s[ans] : 0) : 0; // Handle jika q.s undefined (soal FR lama)
+                tkp += poin;
+                if(poin < 5) {
+                    isWrong = true;
+                    detail = `<span class="text-yellow-600 font-bold">Poin Anda: ${poin}</span> (Max: 5)`;
+                }
+            } else {
+                if (ans === q.k) {
+                    if(q.cat === 'TWK') twk += 5;
+                    if(q.cat === 'TIU') tiu += 5;
+                } else {
+                    isWrong = true;
+                    const userAns = (ans !== undefined) ? String.fromCharCode(65+ans) : "Kosong";
+                    const keyAns = String.fromCharCode(65+q.k);
+                    detail = `<span class="text-red-500">Jawab: ${userAns}</span> <span class="text-gray-400 mx-1">|</span> <span class="text-green-600 font-bold">Kunci: ${keyAns}</span>`;
+                }
+            }
+
+            // Render Baris Kesalahan
+            if (isWrong) {
+                blindSpotHTML += `
+                    <div class="flex justify-between items-center border-b border-gray-100 py-2 text-xs hover:bg-gray-50">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-700 w-8">No.${i+1}</span>
+                            <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px]">${q.cat}</span>
+                        </div>
+                        <div class="text-right">${detail}</div>
+                    </div>
+                `;
+            }
+        });
+
+        // Tentukan Kelulusan (PG 2024)
+        const passTWK = twk >= 65;
+        const passTIU = tiu >= 80;
+        const passTKP = tkp >= 166;
+        const isLulus = passTWK && passTIU && passTKP;
+
+        // Update UI
+        document.getElementById('score-twk').innerText = twk;
+        document.getElementById('score-tiu').innerText = tiu;
+        document.getElementById('score-tkp').innerText = tkp;
+        updateBadge('badge-twk', passTWK);
+        updateBadge('badge-tiu', passTIU);
+        updateBadge('badge-tkp', passTKP);
+
+        const stText = document.getElementById('status-text');
+        const stBan = document.getElementById('status-banner');
+        if(isLulus) {
+            stText.innerText = "LULUS SKD"; stText.className = "font-black text-4xl text-green-600";
+            stBan.className = "bg-green-50 p-6 rounded-2xl border-t-8 border-green-500 text-center mb-6";
+        } else {
+            stText.innerText = "TIDAK LULUS"; stText.className = "font-black text-4xl text-red-600";
+            stBan.className = "bg-red-50 p-6 rounded-2xl border-t-8 border-red-500 text-center mb-6";
+        }
+
+        // Tampilkan Analisis Titik Buta
+        const containerAnalysis = document.getElementById('evaluation-summary');
+        containerAnalysis.innerHTML = `
+            <div class="bg-white p-5 rounded-xl border border-gray-200 mt-6 shadow-sm">
+                <h3 class="font-black text-[#0F2C59] text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+                    🔍 RINCIAN KESALAHAN (TITIK BUTA)
+                </h3>
+                <div class="max-h-64 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
+                    ${blindSpotHTML || '<div class="text-center py-4 text-green-600 font-bold bg-green-50 rounded">Luar Biasa! Tidak ada kesalahan.</div>'}
+                </div>
+                <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100 text-[10px] text-yellow-800 text-center italic">
+                    "Kesalahan adalah guru terbaik. Catat nomor di atas dan pelajari pembahasannya kembali."
+                </div>
+            </div>
+        `;
+
+        saveHistory(currentPaketName, twk, tiu, tkp, isLulus);
+        switchScreen('screen-result');
+    }
+
+    function updateBadge(id, pass) {
+        const el = document.getElementById(id);
+        el.innerText = pass ? "MEMENUHI" : "GAGAL";
+        el.className = pass ? "block text-[9px] font-bold px-2 py-0.5 rounded uppercase mt-1 text-center bg-green-100 text-green-700" : "block text-[9px] font-bold px-2 py-0.5 rounded uppercase mt-1 text-center bg-red-100 text-red-700";
+    }
+
+    function saveHistory(paket, twk, tiu, tkp, status) {
+        const h = JSON.parse(localStorage.getItem('cpns_score_history')) || [];
+        h.push({ paket, date: new Date().toLocaleString('id-ID'), twk, tiu, tkp, total: twk+tiu+tkp, status: status?"LULUS":"GAGAL" });
+        localStorage.setItem('cpns_score_history', JSON.stringify(h));
+    }
+
+    // =========================================
+    // 6. HELPER UMUM (SCREEN & HISTORY)
+    // =========================================
+    function switchScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => { s.classList.add('hidden'); s.classList.remove('active','flex'); });
+        const t = document.getElementById(id);
+        if(t) {
+            t.classList.remove('hidden');
+            if(id === 'screen-login' || id === 'screen-cover') t.classList.add('flex'); else t.classList.add('active');
+            window.scrollTo(0,0);
+        }
+    }
+    window.goToMenu = function() { clearInterval(timerInterval); switchScreen('screen-menu'); }
+    window.goToCover = function() { switchScreen('screen-cover'); }
+    window.hardReset = function() { if(confirm("Hapus semua data latihan?")) { localStorage.clear(); location.reload(); } }
+    
+    // Fix: Resume Modal Actions
+    window.resetProgress = function() { document.getElementById('resume-modal').classList.add('hidden'); hardResetPaket(currentPaketName); prepareQuestions(currentPaketName); }
+    window.resumeProgress = function() { document.getElementById('resume-modal').classList.add('hidden'); const idx = parseInt(localStorage.getItem(`cpns_idx_${currentPaketName}`))||0; prepareQuestions(currentPaketName); setTimeout(()=> { currentIndex = idx; renderQuestion(); }, 100); }
+    function hardResetPaket(p) { localStorage.removeItem(`cpns_session_${p}`); localStorage.removeItem(`cpns_idx_${p}`); }
+
+    // Fix: Show History
+    window.showHistory = function() {
+        const h = JSON.parse(localStorage.getItem('cpns_score_history')) || [];
+        const c = document.getElementById('history-list');
+        c.innerHTML = h.length ? h.slice().reverse().map(x => `
+            <div class="bg-white p-3 border rounded mb-2 text-sm shadow-sm">
+                <div class="flex justify-between font-bold"><span>${x.paket}</span><span class="${x.status==='LULUS'?'text-green-600':'text-red-600'}">${x.status}</span></div>
+                <div class="text-xs text-gray-500 mt-1">Total: ${x.total} (TWK:${x.twk} TIU:${x.tiu} TKP:${x.tkp})</div>
+                <div class="text-[10px] text-gray-400 text-right mt-1">${x.date}</div>
+            </div>`).join('') : '<p class="text-center py-4 text-gray-400 text-xs">Belum ada riwayat ujian.</p>';
+        document.getElementById('history-modal').classList.remove('hidden');
+    }
+    window.closeHistory = function() { document.getElementById('history-modal').classList.add('hidden'); }
+    
+    // Fix: Open Materi/Tips (Dipanggil dari Menu)
+    window.openMateri = function(cat) { alert("Fitur Materi " + cat + " akan segera hadir di update konten berikutnya!"); }
+    window.openTip = function(id) { alert("Tips & Trik " + id + " sedang disiapkan oleh tim penyusun."); }
+
+</script>
+</body>
+</html>

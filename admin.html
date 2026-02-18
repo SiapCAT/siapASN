@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COMMAND CENTER - CAT 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Oswald:wght@500&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; }
+        .font-header { font-family: 'Oswald', sans-serif; }
+        .glass-card { background: white; border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .scroll-hide::-webkit-scrollbar { display: none; }
+    </style>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+    apiKey: "AIzaSyAf_Ffu3G7tYgq3IleE8lMbShMVT63r5Y0",
+    authDomain: "cat-cpns-2026-20b15.firebaseapp.com",
+    projectId: "cat-cpns-2026-20b15",
+    storageBucket: "cat-cpns-2026-20b15.firebasestorage.app",
+    messagingSenderId: "6640497717",
+    appId: "1:6640497717:web:b4b4ec9cbd264d1636ad7c",
+    measurementId: "G-PKKRTG4B7W",
+    databaseURL: "https://cat-cpns-2026-20b15-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // LIVE MONITORING
+        const usersRef = ref(db, 'users');
+        onValue(usersRef, (snapshot) => {
+            const listPending = document.getElementById('list-pending');
+            const listActive = document.getElementById('list-active');
+            
+            // Stats Elements
+            const statTotal = document.getElementById('stat-total');
+            const statActive = document.getElementById('stat-active');
+            const statPending = document.getElementById('stat-pending');
+            
+            listPending.innerHTML = '';
+            listActive.innerHTML = '';
+            
+            let countTotal = 0;
+            let countPending = 0;
+            let countActive = 0;
+
+            const data = snapshot.val();
+
+            if (data) {
+                // Ubah object ke array biar bisa disortir (Terbaru paling atas)
+                const usersArray = Object.entries(data).sort((a, b) => {
+                    return new Date(b[1].created_at) - new Date(a[1].created_at);
+                });
+
+                usersArray.forEach(([uid, user]) => {
+                    countTotal++;
+                    const rawDate = new Date(user.created_at);
+                    const dateStr = !isNaN(rawDate) ? rawDate.toLocaleDateString('id-ID', {day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'}) : 'Baru saja';
+                    const initial = user.email.charAt(0).toUpperCase();
+
+                    if (user.status === 'pending') {
+                        countPending++;
+                        const row = document.createElement('div');
+                        row.className = "bg-white p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm mb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in";
+                        row.innerHTML = `
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold shadow-inner text-lg">
+                                    ${initial}
+                                </div>
+                                <div>
+                                    <p class="font-bold text-gray-800 text-sm">${user.email}</p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <i class="ri-time-line"></i> ${dateStr}
+                                        </span>
+                                        <span class="text-[10px] text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded font-bold border border-yellow-100">
+                                            MENUNGGU
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 w-full sm:w-auto">
+                                <button onclick="hapusUser('${uid}')" class="flex-1 sm:flex-none px-4 py-2 bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-600 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 group">
+                                    <i class="ri-delete-bin-line group-hover:scale-110 transition"></i> TOLAK
+                                </button>
+                                <button onclick="approveUser('${uid}')" class="flex-1 sm:flex-none px-6 py-2 bg-[#0F2C59] hover:bg-blue-900 text-white rounded-lg text-xs font-bold shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 group">
+                                    <i class="ri-check-double-line group-hover:scale-110 transition"></i> TERIMA
+                                </button>
+                            </div>
+                        `;
+                        listPending.appendChild(row);
+                    } else if (user.status === 'active') {
+                        countActive++;
+                        const row = document.createElement('div');
+                        row.className = "flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition border-b border-gray-100 last:border-0";
+                        row.innerHTML = `
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
+                                    ${initial}
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-700 text-xs truncate">${user.email}</p>
+                                    <p class="text-[10px] text-gray-400 flex items-center gap-1">
+                                        <i class="ri-calendar-check-line"></i> Aktif: ${dateStr}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="blokirUser('${uid}')" class="text-gray-300 hover:text-red-500 transition p-2 rounded-full hover:bg-red-50" title="Blokir Akses">
+                                <i class="ri-lock-2-line"></i>
+                            </button>
+                        `;
+                        listActive.appendChild(row);
+                    }
+                });
+            }
+
+            // Update Stats dengan Animasi Angka (Simple)
+            statTotal.innerText = countTotal;
+            statPending.innerText = countPending;
+            statActive.innerText = countActive;
+
+            // Visual Alert di Tab Pending
+            const emptyState = `
+                <div class="flex flex-col items-center justify-center py-10 text-gray-300">
+                    <i class="ri-inbox-line text-4xl mb-2"></i>
+                    <p class="text-xs">Tidak ada antrean baru</p>
+                </div>
+            `;
+            if (countPending === 0) listPending.innerHTML = emptyState;
+        });
+
+        // ACTION BUTTONS
+        window.approveUser = function(uid) {
+            update(ref(db, 'users/' + uid), { status: 'active' });
+        }
+        
+        window.blokirUser = function(uid) {
+            if(confirm("Yakin ingin memblokir akses user ini? Mereka akan kembali ke status Pending.")) {
+                update(ref(db, 'users/' + uid), { status: 'pending' });
+            }
+        }
+
+        window.hapusUser = function(uid) {
+            if(confirm("HAPUS PERMANEN? Data tidak bisa dikembalikan.")) {
+                remove(ref(db, 'users/' + uid));
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-800 pb-10">
+
+    <nav class="bg-[#0F2C59] text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/20">
+                    <i class="ri-admin-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-header text-xl tracking-wide leading-none">ADMINISTRATOR</h1>
+                    <p class="text-[10px] text-blue-200 tracking-widest uppercase opacity-80">Access Control Panel</p>
+                </div>
+            </div>
+            <div class="hidden md:block">
+                <span class="bg-green-500/20 border border-green-500/50 text-green-300 text-xs px-3 py-1 rounded-full flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> System Online
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto px-6 mt-8">
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-blue-200 transition">
+                <div>
+                    <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total User</p>
+                    <h2 class="text-3xl font-black text-gray-800" id="stat-total">0</h2>
+                </div>
+                <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                    <i class="ri-group-line"></i>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-yellow-400 flex items-center justify-between relative overflow-hidden">
+                <div class="relative z-10">
+                    <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Menunggu Verifikasi</p>
+                    <h2 class="text-3xl font-black text-yellow-600" id="stat-pending">0</h2>
+                </div>
+                <div class="w-12 h-12 bg-yellow-50 text-yellow-600 rounded-lg flex items-center justify-center text-2xl animate-pulse">
+                    <i class="ri-time-line"></i>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-green-200 transition">
+                <div>
+                    <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Akses Aktif</p>
+                    <h2 class="text-3xl font-black text-green-600" id="stat-active">0</h2>
+                </div>
+                <div class="w-12 h-12 bg-green-50 text-green-600 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition">
+                    <i class="ri-shield-check-line"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-2 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-header text-xl text-gray-800 flex items-center gap-2">
+                        <i class="ri-notification-3-line text-yellow-500"></i> PERMINTAAN AKSES
+                    </h2>
+                    <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">Prioritas</span>
+                </div>
+                
+                <div id="list-pending" class="space-y-3 min-h-[200px]">
+                    <div class="flex flex-col items-center justify-center py-12 text-gray-300 bg-white rounded-xl border border-dashed border-gray-300">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
+                        <p class="text-xs">Memuat data...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden sticky top-24">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                            <i class="ri-database-2-line text-blue-600"></i> DATABASE USER
+                        </h3>
+                        <div class="h-2 w-2 bg-green-500 rounded-full" title="Realtime Sync"></div>
+                    </div>
+                    
+                    <div class="p-2 max-h-[500px] overflow-y-auto scroll-hide" id="list-active">
+                        </div>
+                    
+                    <div class="p-3 border-t border-gray-100 bg-gray-50 text-center">
+                        <p class="text-[10px] text-gray-400">Total database terenkripsi</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
