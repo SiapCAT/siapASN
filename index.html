@@ -318,8 +318,7 @@
         </div>
     </section>
 
-    <section id="screen-menu" class="screen bg-gray-50 pb-20 hidden">
-        <div class="bg-white sticky top-0 z-30 border-b border-gray-200 px-5 py-4 flex justify-between items-center shadow-sm">
+    <section id="screen-menu" class="screen bg-gray-50 pb-32 hidden overflow-y-auto"> <div class="bg-white sticky top-0 z-30 border-b border-gray-200 px-5 py-4 flex justify-between items-center shadow-sm">
             <div>
                 <h2 class="font-header text-2xl text-black">ARSIP DATA</h2>
                 <p class="text-xs text-gray-500 font-medium">Database Modul & Soal</p>
@@ -328,113 +327,36 @@
         </div>
 
         <div class="p-5 space-y-8 max-w-md mx-auto">
+            
             <div>
                 <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">Strategi & Analisa Data</h3>
-                <div onclick="switchScreen('screen-tips')" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer flex items-center justify-center gap-4 group max-w-lg mx-auto transform active:scale-95">
-                    <div class="bg-yellow-100 p-3 rounded-full text-yellow-600 group-hover:bg-yellow-500 group-hover:text-white transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                    </div>
+                <div onclick="switchScreen('screen-tips')" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer flex items-center justify-center gap-4 group">
+                    <div class="bg-yellow-100 p-3 rounded-full text-yellow-600">💡</div>
                     <div class="text-left">
-                        <h4 class="font-bold text-gray-800 text-lg group-hover:text-yellow-600 transition">Buka Kunci Rahasia Lolos</h4>
-                        <p class="text-xs text-gray-500">Kumpulan strategi taktis, manajemen mental, & bedah passing grade.</p>
+                        <h4 class="font-bold text-gray-800 text-lg">Buka Kunci Rahasia</h4>
+                        <p class="text-xs text-gray-500">Strategi Taktis & Manajemen Waktu</p>
                     </div>
-                    <div class="ml-auto text-gray-300 group-hover:translate-x-1 transition">➔</div>
                 </div>
             </div>
 
             <div>
                 <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Materi SKD 2026</h3>
                 <div class="space-y-3">
-                    <div onclick="openMateri('TWK')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
-                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold text-sm">TWK</div>
-                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Wawasan Kebangsaan</h4><p class="text-xs text-gray-500">Nasionalisme, Pilar Negara</p></div><span class="text-gray-300">➔</span>
+                    <div onclick="openMateri('TWK')" class="bg-white p-4 rounded-xl border flex gap-4 items-center cursor-pointer hover:border-red-500 transition">
+                        <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">TWK</div>
+                        <div><h4 class="font-bold text-gray-800">Wawasan Kebangsaan</h4><p class="text-xs text-gray-500">Nasionalisme, Integritas</p></div>
                     </div>
-                    <div onclick="openMateri('TIU')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
-                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">TIU</div>
-                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Intelegensia Umum</h4><p class="text-xs text-gray-500">Verbal, Numerik, Logika</p></div><span class="text-gray-300">➔</span>
+                    <div onclick="openMateri('TIU')" class="bg-white p-4 rounded-xl border flex gap-4 items-center cursor-pointer hover:border-blue-500 transition">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">TIU</div>
+                        <div><h4 class="font-bold text-gray-800">Intelegensia Umum</h4><p class="text-xs text-gray-500">Verbal, Numerik, Logika</p></div>
                     </div>
-                    <div onclick="openMateri('TKP')" class="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-center cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95">
-                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">TKP</div>
-                        <div class="flex-1"><h4 class="font-bold text-gray-800">Tes Karakteristik Pribadi</h4><p class="text-xs text-gray-500">Pelayanan, Jejaring Kerja</p></div><span class="text-gray-300">➔</span>
+                    <div onclick="openMateri('TKP')" class="bg-white p-4 rounded-xl border flex gap-4 items-center cursor-pointer hover:border-green-500 transition">
+                        <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">TKP</div>
+                        <div><h4 class="font-bold text-gray-800">Karakteristik Pribadi</h4><p class="text-xs text-gray-500">Pelayanan, Jejaring</p></div>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-6">
-    <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Arsip Soal Asli (FR)</h2>
-    
-    <div onclick="checkProgress('FR 2019 - 2020', 'belajar')" 
-         class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-blue-500 hover:shadow-md transition mb-3 group">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                19
-            </div>
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition">FR 2019 - 2020</h4>
-                <p class="text-[10px] text-gray-500">Arsip Soal Lampau</p>
-            </div>
-        </div>
-        <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">BUKA</span>
-    </div>
-
-    <div onclick="checkProgress('FR 2020 - 2021', 'belajar')" 
-         class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-blue-500 hover:shadow-md transition mb-3 group">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                20
-            </div>
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition">FR 2020 - 2021</h4>
-                <p class="text-[10px] text-gray-500">Arsip Soal Lampau</p>
-            </div>
-        </div>
-        <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">BUKA</span>
-    </div>
-
-    <div onclick="checkProgress('FR 2021 - 2022', 'belajar')" 
-         class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-blue-500 hover:shadow-md transition mb-3 group">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                21
-            </div>
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition">FR 2021 - 2022</h4>
-                <p class="text-[10px] text-gray-500">Arsip Soal Lampau</p>
-            </div>
-        </div>
-        <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">BUKA</span>
-    </div>
-
-    <div onclick="checkProgress('FR 2022 - 2023', 'belajar')" 
-         class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-blue-500 hover:shadow-md transition mb-3 group">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                22
-            </div>
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition">FR 2022 - 2023</h4>
-                <p class="text-[10px] text-gray-500">Arsip Soal Lampau</p>
-            </div>
-        </div>
-        <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">BUKA</span>
-    </div>
-
-    <div onclick="checkProgress('FR 2023 - 2024', 'belajar')" 
-         class="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer shadow-sm hover:border-blue-500 hover:shadow-md transition mb-3 group">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                23
-            </div>
-            <div>
-                <h4 class="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition">FR 2023 - 2024</h4>
-                <p class="text-[10px] text-gray-500">Soal Asli Tahun Lalu</p>
-            </div>
-        </div>
-        <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-700">BUKA</span>
-    </div>
-</div>
             <div>
                 <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 mt-8">Simulasi Tryout</h3>
                 <div class="bg-white p-4 rounded-xl border-l-4 border-gray-400 flex justify-between items-center cursor-pointer shadow-sm hover:border-red-500 transition mb-2" onclick="checkProgress('TRYOUT A', 'tryout')">
@@ -449,7 +371,7 @@
             </div>
 
             <div class="mt-8 pt-6 border-t border-gray-200">
-                <button onclick="showHistory()" class="w-full py-4 bg-gray-800 text-white rounded-xl font-bold tracking-wider shadow-md hover:bg-gray-900 transition flex items-center justify-center gap-2 transform active:scale-95">
+                <button onclick="showHistory()" class="w-full py-4 bg-gray-800 text-white rounded-xl font-bold tracking-wider shadow-md hover:bg-gray-900 transition flex items-center justify-center gap-2">
                     <span>📊 LIHAT HISTORI NILAI SAYA</span>
                 </button>
             </div>
@@ -1048,10 +970,45 @@
     }
     window.closeHistory = function() { document.getElementById('history-modal').classList.add('hidden'); }
     
-    // Fix: Open Materi/Tips (Dipanggil dari Menu)
-    window.openMateri = function(cat) { alert("Fitur Materi " + cat + " akan segera hadir di update konten berikutnya!"); }
-    window.openTip = function(id) { alert("Tips & Trik " + id + " sedang disiapkan oleh tim penyusun."); }
+    // FUNGSI MEMBUKA TIPS (FIXED)
+    window.openTip = function(id) {
+        // Cek apakah database tersedia
+        if (typeof DATABASE_TIPS !== 'undefined' && DATABASE_TIPS[id]) {
+            const data = DATABASE_TIPS[id];
+            document.getElementById('detail-icon').innerHTML = `<div class="text-4xl mb-2">${data.icon}</div>`;
+            document.getElementById('detail-title').innerText = data.title;
+            document.getElementById('detail-content').innerHTML = data.content;
+            switchScreen('screen-tips-detail');
+        } else {
+            console.error("Data Tips tidak ditemukan:", id);
+            alert("Maaf, konten tips ini sedang dalam pembaruan.");
+        }
+    }
 
+    // FUNGSI MEMBUKA MATERI (FIXED)
+    window.openMateri = function(cat) {
+        if (typeof DATABASE_MATERI !== 'undefined' && DATABASE_MATERI[cat]) {
+            const container = document.getElementById(`materi-content-${cat}`);
+            if(container) {
+                // Render List Materi
+                container.innerHTML = DATABASE_MATERI[cat].map((m, i) => `
+                    <div class="mb-3 border rounded-lg bg-white overflow-hidden shadow-sm">
+                        <div onclick="this.nextElementSibling.classList.toggle('hidden')" class="p-4 bg-gray-50 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition">
+                            <h4 class="font-bold text-gray-800 text-xs">${i+1}. ${m.subTitle}</h4>
+                            <span class="text-gray-400 text-xs">▼</span>
+                        </div>
+                        <div class="p-4 hidden text-sm text-gray-600 leading-relaxed border-t border-gray-100">
+                            ${m.content}
+                        </div>
+                    </div>
+                `).join('');
+                switchScreen(`materi-${cat}`);
+            }
+        } else {
+            console.error("Data Materi tidak ditemukan:", cat);
+            alert(`Materi ${cat} belum tersedia di database.`);
+        }
+    }
 </script>
 </body>
 </html>
